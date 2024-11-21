@@ -15,16 +15,21 @@ pub struct FilesystemWorker {
 
 impl FilesystemWorker {
     pub fn new(mut file: File, scheduler: FilesystemTasksScheduler, handler: FilesystemTasksHandler) -> Self {
-        let mut header = [0; FilesystemHeader::LENGTH];
+        let header = if file.len() < FilesystemHeader::LENGTH as u64 {
+            FilesystemHeader::default()
+        } else {
+            let mut header = [0; FilesystemHeader::LENGTH];
 
-        header.copy_from_slice(&file.read(0, FilesystemHeader::LENGTH));
+            header.copy_from_slice(&file.read(0, FilesystemHeader::LENGTH));
+
+            FilesystemHeader::from_bytes(&header)
+        };
 
         Self {
             file,
             scheduler: Some(scheduler),
             handler,
-
-            header: FilesystemHeader::from_bytes(&header)
+            header
         }
     }
 

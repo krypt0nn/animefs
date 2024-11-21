@@ -2,29 +2,26 @@ use std::hash::Hasher;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Checksum {
-    None,
     Seahash,
     Siphash,
     Xxh3
 }
 
 impl Checksum {
-    pub fn checksum(&self, data: impl AsRef<[u8]>) -> Option<u64> {
+    pub fn checksum(&self, data: impl AsRef<[u8]>) -> u64 {
         match self {
-            Self::None => None,
-
             Self::Seahash => {
                 let mut hasher = seahash::SeaHasher::new();
 
                 hasher.write(data.as_ref());
 
-                Some(hasher.finish())
+                hasher.finish()
             }
 
             Self::Siphash => {
                 let hasher = siphasher::sip::SipHasher::new();
 
-                Some(hasher.hash(data.as_ref()))
+                hasher.hash(data.as_ref())
             }
 
             Self::Xxh3 => {
@@ -32,7 +29,7 @@ impl Checksum {
 
                 hasher.write(data.as_ref());
 
-                Some(hasher.finish())
+                hasher.finish()
             }
         }
     }

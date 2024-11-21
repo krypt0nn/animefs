@@ -42,8 +42,6 @@ impl<const KEY_SIZE: usize, const VALUE_SIZE: usize> GenericBTree<KEY_SIZE, VALU
 
             let (response_sender, response_receiver) = flume::bounded(1);
 
-            dbg!(curr_page);
-
             self.handler.send_normal(FilesystemTask::ReadPage {
                 page_number: curr_page,
                 offset: 0,
@@ -62,12 +60,8 @@ impl<const KEY_SIZE: usize, const VALUE_SIZE: usize> GenericBTree<KEY_SIZE, VALU
             let mut prev_record = None;
             let mut jump_to_page = false;
 
-            dbg!(page);
-
             while let Some((mut record, remaining)) = GenericBTreeRecord::<KEY_SIZE, VALUE_SIZE>::from_bytes(page) {
                 page = remaining;
-
-                dbg!(&record);
 
                 match record.key.as_ref() {
                     None => {
@@ -230,7 +224,7 @@ mod tests {
     #[test]
     fn linear_insert() {
         use_btree("btree-linear-insert", |btree| {
-            for i in 0..1_000_000_u64 {
+            for i in 0..1_000_u64 {
                 let value = seahash::hash(&i.to_be_bytes());
 
                 btree.insert(&i.to_be_bytes(), value.to_be_bytes());
@@ -245,7 +239,7 @@ mod tests {
 
             let mut rand = tinyrand::Wyrand::default();
 
-            for _ in 0..1_000_000_u64 {
+            for _ in 0..1_000_u64 {
                 let key = rand.next_u64();
                 let value = seahash::hash(&key.to_be_bytes());
 

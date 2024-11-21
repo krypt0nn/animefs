@@ -101,22 +101,22 @@ pub(crate) mod tests {
         use_fs("header", |fs| {
             let header = fs.read_header();
 
-            assert_eq!(header.names_checksum, Checksum::None);
-            assert_eq!(header.names_compression, Compression::None);
+            assert_eq!(header.names_checksum, Checksum::Seahash);
+            assert_eq!(header.names_compression, None);
             assert_eq!(header.names_compression_level, CompressionLevel::Auto);
 
             fs.write_header(FilesystemHeader {
                 page_size: 123,
-                names_checksum: Checksum::Seahash,
-                names_compression: Compression::Lz4,
+                names_checksum: Checksum::Siphash,
+                names_compression: Some(Compression::Lz4),
                 names_compression_level: CompressionLevel::Balanced
             });
 
             let header = fs.read_header();
 
             assert_eq!(header.page_size, 123);
-            assert_eq!(header.names_checksum, Checksum::Seahash);
-            assert_eq!(header.names_compression, Compression::Lz4);
+            assert_eq!(header.names_checksum, Checksum::Siphash);
+            assert_eq!(header.names_compression, Some(Compression::Lz4));
             assert_eq!(header.names_compression_level, CompressionLevel::Balanced);
         });
     }

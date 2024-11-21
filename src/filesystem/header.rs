@@ -8,8 +8,22 @@ pub struct FilesystemHeader {
     pub page_size: u64,
 
     pub names_checksum: Checksum,
-    pub names_compression: Compression,
+    pub names_compression: Option<Compression>,
     pub names_compression_level: CompressionLevel
+}
+
+impl Default for FilesystemHeader {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            // Better ideas?
+            page_size: 1024,
+
+            names_checksum: Checksum::Seahash,
+            names_compression: None,
+            names_compression_level: CompressionLevel::Auto
+        }
+    }
 }
 
 impl FilesystemHeader {
@@ -50,7 +64,8 @@ impl FilesystemHeader {
             page_size,
 
             names_checksum: match names_checksum {
-                Self::FLAG_NAMES_CHECKSUM_NONE    => Checksum::None,
+                Self::FLAG_NAMES_CHECKSUM_NONE => panic!("Failed to read filesystem header : invalid names checksum variant"),
+
                 Self::FLAG_NAMES_CHECKSUM_SEAHASH => Checksum::Seahash,
                 Self::FLAG_NAMES_CHECKSUM_SIPHASH => Checksum::Siphash,
                 Self::FLAG_NAMES_CHECKSUM_XXH3    => Checksum::Xxh3,
@@ -59,10 +74,10 @@ impl FilesystemHeader {
             },
 
             names_compression: match names_compression {
-                Self::FLAG_NAMES_COMPRESSION_NONE   => Compression::None,
-                Self::FLAG_NAMES_COMPRESSION_LZ4    => Compression::Lz4,
-                Self::FLAG_NAMES_COMPRESSION_BROTLI => Compression::Brotli,
-                Self::FLAG_NAMES_COMPRESSION_ZSTD   => Compression::Zstd,
+                Self::FLAG_NAMES_COMPRESSION_NONE   => None,
+                Self::FLAG_NAMES_COMPRESSION_LZ4    => Some(Compression::Lz4),
+                Self::FLAG_NAMES_COMPRESSION_BROTLI => Some(Compression::Brotli),
+                Self::FLAG_NAMES_COMPRESSION_ZSTD   => Some(Compression::Zstd),
 
                 _ => unreachable!()
             },
@@ -87,17 +102,16 @@ impl FilesystemHeader {
         let mut flags = 0;
 
         match self.names_checksum {
-            Checksum::None    => flags |= Self::FLAG_NAMES_CHECKSUM_NONE,
             Checksum::Seahash => flags |= Self::FLAG_NAMES_CHECKSUM_SEAHASH,
             Checksum::Siphash => flags |= Self::FLAG_NAMES_CHECKSUM_SIPHASH,
             Checksum::Xxh3    => flags |= Self::FLAG_NAMES_CHECKSUM_XXH3
         }
 
         match self.names_compression {
-            Compression::None   => flags |= Self::FLAG_NAMES_COMPRESSION_NONE,
-            Compression::Lz4    => flags |= Self::FLAG_NAMES_COMPRESSION_LZ4,
-            Compression::Brotli => flags |= Self::FLAG_NAMES_COMPRESSION_BROTLI,
-            Compression::Zstd   => flags |= Self::FLAG_NAMES_COMPRESSION_ZSTD
+            None                      => flags |= Self::FLAG_NAMES_COMPRESSION_NONE,
+            Some(Compression::Lz4)    => flags |= Self::FLAG_NAMES_COMPRESSION_LZ4,
+            Some(Compression::Brotli) => flags |= Self::FLAG_NAMES_COMPRESSION_BROTLI,
+            Some(Compression::Zstd)   => flags |= Self::FLAG_NAMES_COMPRESSION_ZSTD
         }
 
         match self.names_compression_level {

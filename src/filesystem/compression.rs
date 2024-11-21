@@ -8,7 +8,6 @@ pub enum CompressionLevel {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Compression {
-    None,
     Lz4,
     Brotli,
     Zstd
@@ -17,8 +16,6 @@ pub enum Compression {
 impl Compression {
     pub fn compress(&self, data: impl AsRef<[u8]>, level: CompressionLevel) -> std::io::Result<Vec<u8>> {
         match self {
-            Self::None => Ok(data.as_ref().to_vec()),
-
             Self::Lz4 => Ok(lz4_flex::compress(data.as_ref())),
 
             Self::Brotli => {
@@ -73,8 +70,6 @@ impl Compression {
 
     pub fn decompress(&self, data: impl AsRef<[u8]>) -> std::io::Result<Vec<u8>> {
         match self {
-            Self::None => Ok(data.as_ref().to_vec()),
-
             Self::Lz4 => {
                 let data = data.as_ref();
 

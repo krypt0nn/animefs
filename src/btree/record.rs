@@ -62,7 +62,7 @@ impl<const KEY_SIZE: usize, const VALUE_SIZE: usize> GenericBTreeRecord<KEY_SIZE
         if flags & Self::FLAG_LEFT_ADDR_SET == Self::FLAG_LEFT_ADDR_SET {
             let mut raw_left_addr = [0; 4];
 
-            raw_left_addr.copy_from_slice(&bytes[Self::LEFT_ADDR_OFFSET..Self::KEY_OFFSET]);
+            raw_left_addr.copy_from_slice(&bytes[Self::LEFT_ADDR_OFFSET..Self::FLAG_OFFSET]);
 
             left_addr = Some(u32::from_be_bytes(raw_left_addr));
         }
@@ -107,7 +107,7 @@ impl<const KEY_SIZE: usize, const VALUE_SIZE: usize> GenericBTreeRecord<KEY_SIZE
         if let Some(left_addr) = &self.left_addr {
             record[Self::FLAG_OFFSET] |= Self::FLAG_LEFT_ADDR_SET;
 
-            record[Self::LEFT_ADDR_OFFSET..Self::KEY_OFFSET].copy_from_slice(&left_addr.to_be_bytes());
+            record[Self::LEFT_ADDR_OFFSET..Self::FLAG_OFFSET].copy_from_slice(&left_addr.to_be_bytes());
         }
 
         if let Some(right_addr) = &self.right_addr {
