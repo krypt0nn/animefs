@@ -124,7 +124,11 @@ impl FilesystemTasksScheduler {
                     }
 
                     // last_task is None so we don't need to call push_front later.
-                    None => return true
+                    None => {
+                        self.tasks_polls.push_front(sender);
+
+                        return true;
+                    }
                 }
             }
 

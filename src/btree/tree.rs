@@ -211,8 +211,6 @@ mod tests {
     use super::*;
 
     fn use_btree(name: &str, callback: impl FnOnce(BTree64)) {
-        dbg!("123");
-
         use_fs(name, |fs| {
             let handler = fs.handler().clone();
             let header = fs.read_header();
