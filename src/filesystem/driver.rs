@@ -11,12 +11,17 @@ pub struct FilesystemDriver {
 
 impl FilesystemDriver {
     pub fn open(file: impl AsRef<Path>) -> std::io::Result<Self> {
-        let file = File::options()
+        let mut file = File::options()
             .read(true)
             .write(true)
             .create(true)
             .truncate(false)
             .open(file)?;
+
+        // If file was just created - put header in it.
+        if file.len() < FilesystemHeader::LENGTH as u64 {
+            file.write(0, FilesystemHeader::default().to_bytes());
+        }
 
         let (scheduler, handler) = FilesystemTasksScheduler::new();
 
@@ -76,9 +81,11 @@ impl FilesystemDriver {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::path::PathBuf;
+
     use super::*;
 
-    pub fn use_fs(name: &str, callback: impl FnOnce(FilesystemDriver)) {
+    pub fn use_fs(name: &str, callback: impl FnOnce(FilesystemDriver, PathBuf)) {
         let path = std::env::temp_dir().join(format!(".animefs-test-{name}"));
 
         if path.exists() {
@@ -91,14 +98,14 @@ pub(crate) mod tests {
 
         fs.daemonize();
 
-        callback(fs);
+        callback(fs, path.clone());
 
         std::fs::remove_file(path).expect("Failed to delete filesystem");
     }
 
     #[test]
     fn header() {
-        use_fs("header", |fs| {
+        use_fs("header", |fs, _| {
             let header = fs.read_header();
 
             assert_eq!(header.names_checksum, Checksum::Seahash);

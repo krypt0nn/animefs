@@ -200,12 +200,14 @@ impl<const KEY_SIZE: usize, const VALUE_SIZE: usize> GenericBTree<KEY_SIZE, VALU
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use crate::filesystem::driver::tests::use_fs;
 
     use super::*;
 
-    fn use_btree(name: &str, callback: impl FnOnce(BTree64)) {
-        use_fs(name, |fs| {
+    fn use_btree(name: &str, callback: impl FnOnce(BTree64, FilesystemDriver, PathBuf)) {
+        use_fs(name, |fs, path| {
             let handler = fs.handler().clone();
             let header = fs.read_header();
 
@@ -217,34 +219,54 @@ mod tests {
 
             let btree = BTree64::new(page.number(), header.page_size, handler);
 
-            callback(btree);
+            callback(btree, fs, path);
         });
     }
 
     #[test]
-    fn linear_insert() {
-        use_btree("btree-linear-insert", |btree| {
-            for i in 0..1_000_u64 {
+    fn insert() {
+        // TODO: check pages vector value
+
+        use_btree("btree-linear-asc-insert", |btree, _, path| {
+            for i in 0..btree.page_size {
                 let value = seahash::hash(&i.to_be_bytes());
 
                 btree.insert(&i.to_be_bytes(), value.to_be_bytes());
             }
-        });
-    }
 
-    #[test]
-    fn random_insert() {
-        use_btree("btree-random-insert", |btree| {
+            let pages = (path.metadata().unwrap().len() - FilesystemHeader::LENGTH as u64) / (PageHeader::LENGTH as u64 + btree.page_size);
+
+            assert_eq!(pages, BTreeRecord64::RECORD_SIZE as u64);
+        });
+
+        use_btree("btree-linear-desc-insert", |btree, _, path| {
+            for i in 0..btree.page_size {
+                let i = btree.page_size - i;
+                let value = seahash::hash(&i.to_be_bytes());
+
+                btree.insert(&i.to_be_bytes(), value.to_be_bytes());
+            }
+
+            let pages = (path.metadata().unwrap().len() - FilesystemHeader::LENGTH as u64) / (PageHeader::LENGTH as u64 + btree.page_size);
+
+            assert_eq!(pages, BTreeRecord64::RECORD_SIZE as u64);
+        });
+
+        use_btree("btree-random-insert", |btree, _, path| {
             use tinyrand::Rand;
 
             let mut rand = tinyrand::Wyrand::default();
 
-            for _ in 0..1_000_u64 {
+            for _ in 0..btree.page_size {
                 let key = rand.next_u64();
                 let value = seahash::hash(&key.to_be_bytes());
 
                 btree.insert(&key.to_be_bytes(), value.to_be_bytes());
             }
+
+            let pages = (path.metadata().unwrap().len() - FilesystemHeader::LENGTH as u64) / (PageHeader::LENGTH as u64 + btree.page_size);
+
+            assert_eq!(pages, BTreeRecord64::RECORD_SIZE as u64);
         });
     }
 }
