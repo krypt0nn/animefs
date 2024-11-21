@@ -1,0 +1,31 @@
+[package]
+name = "animefs"
+version = "0.1.0"
+description = "Experimental virtual filesystem for weebs"
+authors = ["Nikita Podvirnyi <krypt0nn@vk.com>"]
+homepage = "https://github.com/krypt0nn/animefs"
+repository = "https://github.com/krypt0nn/animefs"
+license = "MIT"
+edition = "2021"
+
+[profile.release]
+strip = true
+lto = true
+opt-level = 3
+
+[dependencies]
+mimalloc = "0.1"
+
+tinyrand = "0.5.0"
+flume = "0.11.0"
+anyhow = "1.0"
+
+# Checksums
+seahash = "4.1.0"
+siphasher = "1.0.1"
+xxhash-rust = { version = "0.8.12", features = ["xxh3"] }
+
+# Compression
+lz4_flex = "0.11.3"
+brotli = "6.0.0"
+zstd = "0.13.2"
