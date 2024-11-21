@@ -34,7 +34,7 @@ impl<const KEY_SIZE: usize, const VALUE_SIZE: usize> GenericBTree<KEY_SIZE, VALU
     }
 
     /// Insert provided value under the given key to the filesystem.
-    pub fn insert(&self, key: &[u8; KEY_SIZE], value: &[u8; VALUE_SIZE]) {
+    pub fn insert(&self, key: &[u8; KEY_SIZE], value: [u8; VALUE_SIZE]) {
         let mut curr_page = self.entry_page;
 
         loop {
@@ -71,7 +71,7 @@ impl<const KEY_SIZE: usize, const VALUE_SIZE: usize> GenericBTree<KEY_SIZE, VALU
 
                 match record.key.as_ref() {
                     None => {
-                        let record = GenericBTreeRecord::<KEY_SIZE, VALUE_SIZE>::new(*key, *value);
+                        let record = GenericBTreeRecord::<KEY_SIZE, VALUE_SIZE>::new(*key, value);
 
                         self.handler.send_normal(FilesystemTask::WritePage {
                             page_number: curr_page,
@@ -86,7 +86,7 @@ impl<const KEY_SIZE: usize, const VALUE_SIZE: usize> GenericBTree<KEY_SIZE, VALU
                     }
 
                     Some(record_key) if record_key == key => {
-                        record.value = Some(*value);
+                        record.value = Some(value);
 
                         self.handler.send_normal(FilesystemTask::WritePage {
                             page_number: curr_page,
@@ -186,7 +186,7 @@ impl<const KEY_SIZE: usize, const VALUE_SIZE: usize> GenericBTree<KEY_SIZE, VALU
                 }
 
                 else {
-                    let new_record = GenericBTreeRecord::new(*key, *value);
+                    let new_record = GenericBTreeRecord::new(*key, value);
 
                     self.handler.send_normal(FilesystemTask::WritePage {
                         page_number: curr_page,
@@ -235,7 +235,7 @@ mod tests {
             for i in 0..1_000_000_u64 {
                 let value = seahash::hash(&i.to_be_bytes());
 
-                btree.insert(&i.to_be_bytes(), &value.to_be_bytes());
+                btree.insert(&i.to_be_bytes(), value.to_be_bytes());
             }
         });
     }
@@ -251,7 +251,7 @@ mod tests {
                 let key = rand.next_u64();
                 let value = seahash::hash(&key.to_be_bytes());
 
-                btree.insert(&key.to_be_bytes(), &value.to_be_bytes());
+                btree.insert(&key.to_be_bytes(), value.to_be_bytes());
             }
         });
     }

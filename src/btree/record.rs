@@ -15,8 +15,8 @@ impl<const KEY_SIZE: usize, const VALUE_SIZE: usize> GenericBTreeRecord<KEY_SIZE
     pub const RECORD_SIZE: usize = KEY_SIZE + VALUE_SIZE + 9;
 
     pub const LEFT_ADDR_OFFSET: usize  = 0;
-    pub const FLAG_OFFSET: usize       = Self::LEFT_ADDR_OFFSET + 1;
-    pub const KEY_OFFSET: usize        = Self::FLAG_OFFSET + 4;
+    pub const FLAG_OFFSET: usize       = Self::LEFT_ADDR_OFFSET + 4;
+    pub const KEY_OFFSET: usize        = Self::FLAG_OFFSET + 1;
     pub const VALUE_OFFSET: usize      = Self::KEY_OFFSET + KEY_SIZE;
     pub const RIGHT_ADDR_OFFSET: usize = Self::VALUE_OFFSET + VALUE_SIZE;
 

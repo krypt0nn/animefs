@@ -4,69 +4,6 @@ use flume::{Sender, Receiver};
 
 use crate::prelude::*;
 
-#[derive(Debug, Clone)]
-/// Low-level filesystem operation task.
-pub enum FilesystemTask {
-    ReadFilesystemHeader {
-        response_sender: Sender<FilesystemHeader>
-    },
-
-    WriteFilesystemHeader {
-        header: FilesystemHeader
-    },
-
-    CreatePage {
-        parent_page_number: Option<u32>,
-        response_sender: Sender<Page>
-    },
-
-    LinkPages {
-        page_number: u32,
-        next_page_number: u32
-    },
-
-    ReadPageHeader {
-        page_number: u32,
-        response_sender: Sender<PageHeader>
-    },
-
-    WritePageHeader {
-        page_number: u32,
-        header: PageHeader
-    },
-
-    /// Read bytes from the page's body.
-    ///
-    /// This operation will read requested amount of bytes
-    /// from the offset relative to the page's body.
-    ///
-    /// If the offset is larger than the page's body size -
-    /// empty vector will be returned.
-    ///
-    /// If requested length + offset is larger than the body
-    /// size - only available bytes will be returned.
-    ReadPage {
-        page_number: u32,
-        offset: u64,
-        length: u64,
-        response_sender: Sender<Vec<u8>>
-    },
-
-    /// Write bytes to the page's body.
-    ///
-    /// This operation will write provided bytes slice
-    /// to the given page with given offset. Offset is
-    /// relative to the page's body. If more bytes given
-    /// than page's body can store (page size) - remaining
-    /// bytes are returned back to the `response_sender`.
-    WritePage {
-        page_number: u32,
-        offset: u64,
-        bytes: Vec<u8>,
-        response_sender: Option<Sender<Vec<u8>>>
-    }
-}
-
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FilesystemTaskPriority {
     /// Task will be executed before all the other operations.
@@ -84,11 +21,13 @@ pub enum FilesystemTaskPriority {
 
 #[derive(Debug, Clone)]
 pub enum FilesystemSchedulerTask {
+    /// Push task to the scheduler.
     PushTask {
         task: FilesystemTask,
         priority: FilesystemTaskPriority
     },
 
+    /// Poll next task from the scheduler.
     PollTask(Sender<FilesystemTask>)
 }
 
@@ -228,87 +167,5 @@ impl FilesystemTasksScheduler {
                 self.tasks_low.pop_front()
                     .map(|task| (task, FilesystemTaskPriority::Low))
             })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct FilesystemTasksHandler {
-    sender: Sender<FilesystemSchedulerTask>
-}
-
-impl FilesystemTasksHandler {
-    #[inline]
-    pub fn new(sender: Sender<FilesystemSchedulerTask>) -> Self {
-        Self {
-            sender
-        }
-    }
-
-    /// Send filesystem task to the scheduler with specified priority.
-    pub fn send(&self, task: FilesystemTask, priority: FilesystemTaskPriority) -> anyhow::Result<()> {
-        self.sender.send(FilesystemSchedulerTask::PushTask {
-            task,
-            priority
-        })?;
-
-        Ok(())
-    }
-
-    /// Send filesystem task to the scheduler with specified priority.
-    pub async fn send_async(&self, task: FilesystemTask, priority: FilesystemTaskPriority) -> anyhow::Result<()> {
-        self.sender.send_async(FilesystemSchedulerTask::PushTask {
-            task,
-            priority
-        }).await?;
-
-        Ok(())
-    }
-
-    /// Send filesystem task to the scheduler with highest priority.
-    pub fn send_high(&self, task: FilesystemTask) -> anyhow::Result<()> {
-        self.send(task, FilesystemTaskPriority::High)
-    }
-
-    /// Send filesystem task to the scheduler with highest priority.
-    pub async fn send_high_async(&self, task: FilesystemTask) -> anyhow::Result<()> {
-        self.send_async(task, FilesystemTaskPriority::High).await
-    }
-
-    /// Send filesystem task to the scheduler with normal priority.
-    pub fn send_normal(&self, task: FilesystemTask) -> anyhow::Result<()> {
-        self.send(task, FilesystemTaskPriority::Normal)
-    }
-
-    /// Send filesystem task to the scheduler with normal priority.
-    pub async fn send_normal_async(&self, task: FilesystemTask) -> anyhow::Result<()> {
-        self.send_async(task, FilesystemTaskPriority::Normal).await
-    }
-
-    /// Send filesystem task to the scheduler with lowest priority.
-    pub fn send_low(&self, task: FilesystemTask) -> anyhow::Result<()> {
-        self.send(task, FilesystemTaskPriority::Low)
-    }
-
-    /// Send filesystem task to the scheduler with lowest priority.
-    pub async fn send_low_async(&self, task: FilesystemTask) -> anyhow::Result<()> {
-        self.send_async(task, FilesystemTaskPriority::Low).await
-    }
-
-    /// Poll filesystem task from the scheduler.
-    pub fn poll(&self) -> anyhow::Result<FilesystemTask> {
-        let (send, recv) = flume::bounded(1);
-
-        self.sender.send(FilesystemSchedulerTask::PollTask(send))?;
-
-        Ok(recv.recv()?)
-    }
-
-    /// Poll filesystem task from the scheduler.
-    pub async fn poll_async(&self) -> anyhow::Result<FilesystemTask> {
-        let (send, recv) = flume::bounded(1);
-
-        self.sender.send_async(FilesystemSchedulerTask::PollTask(send)).await?;
-
-        Ok(recv.recv_async().await?)
     }
 }
