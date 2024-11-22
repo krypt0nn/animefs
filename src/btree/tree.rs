@@ -239,13 +239,14 @@ impl<const KEY_SIZE: usize, const VALUE_SIZE: usize> GenericBTree<KEY_SIZE, VALU
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use std::fs::File;
 
-    use crate::filesystem::driver::tests::use_fs;
+    use crate::filesystem::driver::tests::with_fs;
 
     use super::*;
 
-    fn use_btree(name: &str, callback: impl FnOnce(BTree64, FilesystemDriver, PathBuf)) {
-        use_fs(name, |fs, path| {
+    fn with_btree(name: &str, callback: impl FnOnce(BTree64, FilesystemDriver<BufStorageIO<File>>, PathBuf)) {
+        with_fs(name, |fs, path| {
             let handler = fs.handler().clone();
             let header = fs.read_header();
 
@@ -267,7 +268,7 @@ mod tests {
 
         const RECORDS: u64 = 128;
 
-        use_btree("btree-linear-asc-insert", |btree, _, path| {
+        with_btree("btree-linear-asc-insert", |btree, _, path| {
             for i in 0..RECORDS {
                 let value = seahash::hash(&i.to_be_bytes());
 
@@ -280,7 +281,7 @@ mod tests {
             assert_eq!(pages, (RECORDS as f64 / btree.max_records() as f64).ceil() as u64);
         });
 
-        use_btree("btree-linear-desc-insert", |btree, _, path| {
+        with_btree("btree-linear-desc-insert", |btree, _, path| {
             for i in 0..RECORDS {
                 let i = RECORDS - i;
                 let value = seahash::hash(&i.to_be_bytes());

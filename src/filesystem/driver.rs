@@ -1,47 +1,31 @@
-use std::path::Path;
-use std::fs::File;
-
 use crate::prelude::*;
 
-#[derive(Debug)]
-pub struct FilesystemDriver {
-    worker: Option<FilesystemWorker>,
+#[derive(Debug, Clone)]
+pub struct FilesystemDriver<T> {
+    worker: Option<FilesystemWorker<T>>,
     handler: FilesystemTasksHandler
 }
 
-impl FilesystemDriver {
-    pub fn open(file: impl AsRef<Path>) -> std::io::Result<Self> {
-        let mut file = File::options()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(file)?;
-
+impl<T: StorageIO> FilesystemDriver<T> {
+    pub fn new(mut io: T) -> Self {
         // If file was just created - put header in it.
-        if file.len() < FilesystemHeader::LENGTH as u64 {
-            file.write(0, FilesystemHeader::default().to_bytes());
+        if io.len() < FilesystemHeader::LENGTH as u64 {
+            io.write(0, FilesystemHeader::default().to_bytes());
         }
 
         let (scheduler, handler) = FilesystemTasksScheduler::new();
 
-        let worker = FilesystemWorker::new(file, scheduler, handler.clone());
+        let worker = FilesystemWorker::new(io, scheduler, handler.clone());
 
-        Ok(Self {
+        Self {
             worker: Some(worker),
             handler
-        })
+        }
     }
 
     #[inline]
     pub const fn handler(&self) -> &FilesystemTasksHandler {
         &self.handler
-    }
-
-    #[inline]
-    /// Daemonize filesystem worker.
-    pub fn daemonize(&mut self) -> Option<std::thread::JoinHandle<()>> {
-        self.worker.take().map(FilesystemWorker::daemonize)
     }
 
     /// Perform filesystem worker update.
@@ -79,13 +63,22 @@ impl FilesystemDriver {
     }
 }
 
+impl<T: StorageIO + Send + Sync + 'static> FilesystemDriver<T> {
+    #[inline]
+    /// Daemonize filesystem worker.
+    pub fn daemonize(&mut self) -> Option<std::thread::JoinHandle<()>> {
+        self.worker.take().map(FilesystemWorker::daemonize)
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::path::PathBuf;
+    use std::fs::File;
 
     use super::*;
 
-    pub fn use_fs(name: &str, callback: impl FnOnce(FilesystemDriver, PathBuf)) {
+    pub fn with_fs(name: &str, callback: impl FnOnce(FilesystemDriver<BufStorageIO<File>>, PathBuf)) {
         let path = std::env::temp_dir().join(format!(".animefs-test-{name}"));
 
         if path.exists() {
@@ -93,8 +86,17 @@ pub(crate) mod tests {
                 .expect("Failed to open filesystem");
         }
 
-        let mut fs = FilesystemDriver::open(&path)
-            .expect("Failed to open filesystem");
+        let file = File::options()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .expect("Failed to open file");
+
+        let buf = BufStorageIO::new(file, 1024 * 1024);
+
+        let mut fs = FilesystemDriver::new(buf);
 
         fs.daemonize();
 
@@ -105,7 +107,7 @@ pub(crate) mod tests {
 
     #[test]
     fn header() {
-        use_fs("header", |fs, _| {
+        with_fs("header", |fs, _| {
             let header = fs.read_header();
 
             assert_eq!(header.names_checksum, Checksum::Seahash);

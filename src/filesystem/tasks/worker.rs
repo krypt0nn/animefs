@@ -1,56 +1,34 @@
-use std::fs::File;
-
 use crate::prelude::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Struct that listens to incoming tasks and executed them.
-pub struct FilesystemWorker {
-    file: File,
+pub struct FilesystemWorker<T> {
+    io: T,
     scheduler: Option<FilesystemTasksScheduler>,
     handler: FilesystemTasksHandler,
 
     /// Hot cache of the filesystem header.
-    header: FilesystemHeader,
-
-    // Hot cache of the filesystem pages.
-    // pages: HashMap<u32, Vec<u8>>
+    header: FilesystemHeader
 }
 
-impl FilesystemWorker {
-    pub fn new(mut file: File, scheduler: FilesystemTasksScheduler, handler: FilesystemTasksHandler) -> Self {
+impl<T: StorageIO> FilesystemWorker<T> {
+    pub fn new(mut io: T, scheduler: FilesystemTasksScheduler, handler: FilesystemTasksHandler) -> Self {
         let mut header = [0; FilesystemHeader::LENGTH];
 
-        header.copy_from_slice(&file.read(0, FilesystemHeader::LENGTH));
+        header.copy_from_slice(&io.read(0, FilesystemHeader::LENGTH));
 
         Self {
-            file,
+            io,
             scheduler: Some(scheduler),
             handler,
 
-            header: FilesystemHeader::from_bytes(&header),
-            // pages: HashMap::new()
+            header: FilesystemHeader::from_bytes(&header)
         }
     }
 
     #[inline]
     pub const fn handler(&self) -> &FilesystemTasksHandler {
         &self.handler
-    }
-
-    #[inline]
-    /// Spawn new thread and run worker updates in a loop.
-    pub fn daemonize(mut self) -> std::thread::JoinHandle<()> {
-        if let Some(scheduler) = self.scheduler.take() {
-            scheduler.daemonize();
-        }
-
-        std::thread::spawn(move || {
-            loop {
-                if let Err(err) = self.update() {
-                    panic!("Failed to execute filesystem task : filesystem closed : {err}");
-                }
-            }
-        })
     }
 
     /// Poll filesystem task from the scheduler and execute it.
@@ -78,7 +56,7 @@ impl FilesystemWorker {
                 self.header = header;
 
                 // TODO: can safely be delayed.
-                self.file.write(0, header.to_bytes());
+                self.io.write(0, header.to_bytes());
             }
 
             FilesystemTask::CreatePage { parent_page_number, response_sender } => {
@@ -90,10 +68,10 @@ impl FilesystemWorker {
                     has_next: false
                 };
 
-                let len = self.file.len();
+                let len = self.io.len();
 
-                self.file.append(page_header.to_bytes());
-                self.file.append(vec![0; self.header.page_size as usize]);
+                self.io.append(page_header.to_bytes());
+                self.io.append(vec![0; self.header.page_size as usize]);
 
                 if len < FilesystemHeader::LENGTH as u64 {
                     let page = Page::new(0, self.handler.clone());
@@ -119,7 +97,7 @@ impl FilesystemWorker {
 
                 let page_pos = FilesystemHeader::LENGTH as u64 + page_number as u64 * (PageHeader::LENGTH as u64 + self.header.page_size);
 
-                page_header.copy_from_slice(&self.file.read(page_pos, PageHeader::LENGTH));
+                page_header.copy_from_slice(&self.io.read(page_pos, PageHeader::LENGTH));
 
                 let _ = response_sender.send(PageHeader::from_bytes(&page_header));
             }
@@ -127,7 +105,7 @@ impl FilesystemWorker {
             FilesystemTask::WritePageHeader { page_number, header } => {
                 let page_pos = FilesystemHeader::LENGTH as u64 + page_number as u64 * (PageHeader::LENGTH as u64 + self.header.page_size);
 
-                self.file.write(page_pos, header.to_bytes());
+                self.io.write(page_pos, header.to_bytes());
             }
 
             FilesystemTask::ReadPage { page_number, offset, length, response_sender } => {
@@ -154,9 +132,9 @@ impl FilesystemWorker {
 
                     let bytes = if offset + length > self.header.page_size {
                         // offset < page_size
-                        self.file.read(page_pos + offset, (self.header.page_size - offset) as usize)
+                        self.io.read(page_pos + offset, (self.header.page_size - offset) as usize)
                     } else {
-                        self.file.read(page_pos + offset, length as usize)
+                        self.io.read(page_pos + offset, length as usize)
                     };
 
                     let _ = response_sender.send(bytes);
@@ -183,7 +161,7 @@ impl FilesystemWorker {
                         //
                         let split = (self.header.page_size - offset) as usize;
 
-                        self.file.write(page_pos + offset, &bytes[..split]);
+                        self.io.write(page_pos + offset, &bytes[..split]);
 
                         if let Some(response_sender) = response_sender {
                             let _ = response_sender.send(bytes[split..].to_vec());
@@ -191,12 +169,30 @@ impl FilesystemWorker {
                     }
 
                     else {
-                        self.file.write(page_pos + offset, bytes);
+                        self.io.write(page_pos + offset, bytes);
                     }
                 }
             }
         }
 
         Ok(())
+    }
+}
+
+impl<T: StorageIO + Send + Sync + 'static> FilesystemWorker<T> {
+    #[inline]
+    /// Spawn new thread and run worker updates in a loop.
+    pub fn daemonize(mut self) -> std::thread::JoinHandle<()> {
+        if let Some(scheduler) = self.scheduler.take() {
+            scheduler.daemonize();
+        }
+
+        std::thread::spawn(move || {
+            loop {
+                if let Err(err) = self.update() {
+                    panic!("Failed to execute filesystem task : filesystem closed : {err}");
+                }
+            }
+        })
     }
 }

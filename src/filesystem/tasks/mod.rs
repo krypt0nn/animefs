@@ -1,3 +1,5 @@
+#![allow(clippy::module_inception)]
+
 pub mod tasks;
 pub mod handler;
 pub mod scheduler;

@@ -1,9 +1,12 @@
-use std::io::{Read, Write, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::fs::File;
 
-pub trait FilesystemIo<T: Read + Write + Seek> {
+/// General interface to provide bytes storage.
+pub trait StorageIO {
+    type Reader: Read + Write + Seek;
+
     /// Get mutable reference to the filesystem IO interface.
-    fn io(&mut self) -> &mut T;
+    fn io(&mut self) -> &mut Self::Reader;
 
     /// Low level direct read operation. Returns bytes vector
     /// with exactly requested amount of bytes. If reader is
@@ -31,7 +34,7 @@ pub trait FilesystemIo<T: Read + Write + Seek> {
             .unwrap_or_else(|err| {
                 panic!(
                     "Failed to write {} at offset 0x{offset:08x} : seek failed : {err}",
-                    std::any::type_name::<T>()
+                    std::any::type_name::<Self::Reader>()
                 );
             });
 
@@ -41,7 +44,7 @@ pub trait FilesystemIo<T: Read + Write + Seek> {
                 .unwrap_or_else(|err| {
                     panic!(
                         "Failed to write {} at offset 0x{reader_offset:08x} : write failed : {err}",
-                        std::any::type_name::<T>()
+                        std::any::type_name::<Self::Reader>()
                     );
                 });
         }
@@ -50,14 +53,14 @@ pub trait FilesystemIo<T: Read + Write + Seek> {
             .unwrap_or_else(|err| {
                 panic!(
                     "Failed to write {} at offset 0x{offset:08x} : write failed : {err}",
-                    std::any::type_name::<T>()
+                    std::any::type_name::<Self::Reader>()
                 );
             });
 
         io.flush().unwrap_or_else(|err| {
             panic!(
                 "Failed to write {} at offset 0x{offset:08x} : flush failed : {err}",
-                std::any::type_name::<T>()
+                std::any::type_name::<Self::Reader>()
             );
         });
     }
@@ -70,7 +73,7 @@ pub trait FilesystemIo<T: Read + Write + Seek> {
             .unwrap_or_else(|err| {
                 panic!(
                     "Failed to append {} : seek failed : {err}",
-                    std::any::type_name::<T>()
+                    std::any::type_name::<Self::Reader>()
                 );
             });
 
@@ -78,14 +81,14 @@ pub trait FilesystemIo<T: Read + Write + Seek> {
             .unwrap_or_else(|err| {
                 panic!(
                     "Failed to append {} : write failed : {err}",
-                    std::any::type_name::<T>()
+                    std::any::type_name::<Self::Reader>()
                 );
             });
 
         io.flush().unwrap_or_else(|err| {
             panic!(
                 "Failed to append {} : flush failed : {err}",
-                std::any::type_name::<T>()
+                std::any::type_name::<Self::Reader>()
             );
         });
     }
@@ -95,7 +98,7 @@ pub trait FilesystemIo<T: Read + Write + Seek> {
         self.io().seek(SeekFrom::End(0)).unwrap_or_else(|err| {
             panic!(
                 "Failed to get len of {} : seek failed : {err}",
-                std::any::type_name::<T>()
+                std::any::type_name::<Self::Reader>()
             );
         })
     }
@@ -107,7 +110,9 @@ pub trait FilesystemIo<T: Read + Write + Seek> {
     }
 }
 
-impl FilesystemIo<File> for File {
+impl StorageIO for File {
+    type Reader = File;
+
     #[inline]
     fn io(&mut self) -> &mut File {
         self
@@ -116,14 +121,12 @@ impl FilesystemIo<File> for File {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
-
-    use super::FilesystemIo;
+    use super::{File, StorageIO};
 
     fn get_io(name: &str) -> (File, std::path::PathBuf) {
         let path = std::env::temp_dir().join(format!(".animefs-io-test-{name}"));
 
-        let fs = File::options()
+        let file = File::options()
             .read(true)
             .write(true)
             .create(true)
@@ -131,7 +134,7 @@ mod tests {
             .open(&path)
             .expect("Failed to open file");
 
-        (fs, path)
+        (file, path)
     }
 
     #[test]
