@@ -265,8 +265,10 @@ mod tests {
     fn insert() {
         // TODO: check pages vector value
 
+        const RECORDS: u64 = 128;
+
         use_btree("btree-linear-asc-insert", |btree, _, path| {
-            for i in 0..btree.page_size {
+            for i in 0..RECORDS {
                 let value = seahash::hash(&i.to_be_bytes());
 
                 btree.insert(&i.to_be_bytes(), value.to_be_bytes());
@@ -275,12 +277,12 @@ mod tests {
             let pages = (path.metadata().unwrap().len() - FilesystemHeader::LENGTH as u64) / (PageHeader::LENGTH as u64 + btree.page_size);
 
             // keys[n + 1] < keys[n] => records will fill whole pages space.
-            assert_eq!(pages, (btree.page_size as f64 / btree.max_records() as f64).ceil() as u64);
+            assert_eq!(pages, (RECORDS as f64 / btree.max_records() as f64).ceil() as u64);
         });
 
         use_btree("btree-linear-desc-insert", |btree, _, path| {
-            for i in 0..btree.page_size {
-                let i = btree.page_size - i;
+            for i in 0..RECORDS {
+                let i = RECORDS - i;
                 let value = seahash::hash(&i.to_be_bytes());
 
                 btree.insert(&i.to_be_bytes(), value.to_be_bytes());
@@ -290,7 +292,7 @@ mod tests {
 
             // keys[n + 1] > keys[n] => all the records will be put
             // on new pages.
-            assert_eq!(pages, btree.page_size);
+            assert_eq!(pages, RECORDS);
         });
 
         // FIXME: infinite loop?

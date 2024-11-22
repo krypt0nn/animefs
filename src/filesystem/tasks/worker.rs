@@ -10,7 +10,10 @@ pub struct FilesystemWorker {
     handler: FilesystemTasksHandler,
 
     /// Hot cache of the filesystem header.
-    header: FilesystemHeader
+    header: FilesystemHeader,
+
+    // Hot cache of the filesystem pages.
+    // pages: HashMap<u32, Vec<u8>>
 }
 
 impl FilesystemWorker {
@@ -24,7 +27,8 @@ impl FilesystemWorker {
             scheduler: Some(scheduler),
             handler,
 
-            header: FilesystemHeader::from_bytes(&header)
+            header: FilesystemHeader::from_bytes(&header),
+            // pages: HashMap::new()
         }
     }
 
@@ -130,6 +134,20 @@ impl FilesystemWorker {
                 if offset >= self.header.page_size || length == 0 {
                     let _ = response_sender.send(vec![]);
                 }
+
+                // else if let Some(bytes) = self.pages.get(&page_number) {
+                //     let offset = offset as usize;
+                //     let length = length as usize;
+
+                //     let bytes = if offset + length > self.header.page_size as usize {
+                //         // offset < page_size
+                //         &bytes[offset..]
+                //     } else {
+                //         &bytes[offset..offset + length]
+                //     };
+
+                //     let _ = response_sender.send(bytes.to_vec());
+                // }
 
                 else {
                     let page_pos = FilesystemHeader::LENGTH as u64 + page_number as u64 * (PageHeader::LENGTH as u64 + self.header.page_size) + PageHeader::LENGTH as u64;
