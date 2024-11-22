@@ -227,13 +227,21 @@ mod tests {
 
             let mut rand = Wyrand::default();
 
-            for _ in 0..1000 {
+            file.append(vec![rand.next_lim_u16(256) as u8; rand.next_lim_usize(16)]);
+
+            for i in 0..1000 {
                 let offset = rand.next_lim_u64(256);
                 let bytes = vec![rand.next_lim_u16(256) as u8; rand.next_lim_usize(256)];
 
                 file.write(offset, &bytes);
                 buf.write(offset, bytes);
+
+                if i == 500 {
+                    file.append(vec![rand.next_lim_u16(256) as u8; rand.next_lim_usize(32)]);
+                }
             }
+
+            file.append(vec![rand.next_lim_u16(256) as u8; rand.next_lim_usize(16)]);
 
             assert!(!file.is_empty());
             assert!(!buf.is_empty());
