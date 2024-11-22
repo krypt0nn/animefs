@@ -13,8 +13,19 @@ pub enum FilesystemTask {
         header: FilesystemHeader
     },
 
+    /// Create new filesystem page. It will be assigned to the next
+    /// available number, so if the last page has number N - the new
+    /// one will have number N + 1.
     CreatePage {
+        /// Number of the parent page to link the new one with.
+        /// Parent page will not be linked with this one so you have
+        /// to call `LinkPages` operation.
+        ///
+        /// When parent page is not given the new page will not be linked
+        /// to anything.
         parent_page_number: Option<u32>,
+
+        /// Where to send the created page.
         response_sender: Sender<Page>
     },
 

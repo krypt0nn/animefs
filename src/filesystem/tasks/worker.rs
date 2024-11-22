@@ -86,20 +86,24 @@ impl FilesystemWorker {
                     has_next: false
                 };
 
+                let len = self.file.len();
+
                 self.file.append(page_header.to_bytes());
                 self.file.append(vec![0; self.header.page_size as usize]);
 
-                let len = self.file.len();
+                if len < FilesystemHeader::LENGTH as u64 {
+                    let page = Page::new(0, self.handler.clone());
 
-                let page = if len < FilesystemHeader::LENGTH as u64 {
-                    Page::new(0, self.handler.clone())
-                } else {
+                    let _ = response_sender.send(page);
+                }
+
+                else {
                     let last_page_number = (len - FilesystemHeader::LENGTH as u64) / (PageHeader::LENGTH as u64 + self.header.page_size);
 
-                    Page::new(last_page_number as u32 + 1, self.handler.clone())
-                };
+                    let page = Page::new(last_page_number as u32 + 1, self.handler.clone());
 
-                let _ = response_sender.send(page);
+                    let _ = response_sender.send(page);
+                }
             }
 
             FilesystemTask::LinkPages { page_number, next_page_number } => {

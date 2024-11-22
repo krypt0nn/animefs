@@ -12,7 +12,24 @@ impl<const KEY_SIZE: usize, const VALUE_SIZE: usize> GenericBTreeRecord<KEY_SIZE
     pub const FLAG_VALUE_SET: u8      = 0b0000_0100;
     pub const FLAG_RIGHT_ADDR_SET: u8 = 0b0000_0001;
 
+    /// Total size in bytes of individual record.
+    /// Note that you should be using `RECORD_SHIFT` in an actual B-Tree.
     pub const RECORD_SIZE: usize = KEY_SIZE + VALUE_SIZE + 9;
+
+    /// Size of the record considering record are overlapping each other.
+    ///
+    /// ```text
+    /// [record]
+    ///      [record]
+    /// ^^^^^     [record]
+    ///      ^^^^^     [record]
+    ///           ^^^^^     ~~~
+    ///
+    /// ^^^^^ - `RECORD_SHIFT`
+    /// ~~~~~ - Remaining bytes in the last record
+    ///         equal to `RECORD_SIZE - RECORD_SHIFT`.
+    /// ```
+    pub const RECORD_SHIFT: usize = Self::RECORD_SIZE - 4;
 
     pub const LEFT_ADDR_OFFSET: usize  = 0;
     pub const FLAG_OFFSET: usize       = Self::LEFT_ADDR_OFFSET + 4;
@@ -82,11 +99,7 @@ impl<const KEY_SIZE: usize, const VALUE_SIZE: usize> GenericBTreeRecord<KEY_SIZE
             right_addr
         };
 
-        if bytes.len() >= Self::RECORD_SIZE - 4 {
-            Some((record, &bytes[Self::RECORD_SIZE - 4..]))
-        } else {
-            Some((record, &[]))
-        }
+        Some((record, &bytes[Self::RECORD_SHIFT..]))
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
