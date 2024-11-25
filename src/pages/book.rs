@@ -33,7 +33,15 @@ pub struct Book {
 
 impl Book {
     #[inline]
-    pub fn entry_page(&self) -> &Page {
+    pub const fn open(entry_page: Page, page_size: u64) -> Self {
+        Self {
+            entry_page,
+            page_size
+        }
+    }
+
+    #[inline]
+    pub const fn entry_page(&self) -> &Page {
         &self.entry_page
     }
 
@@ -77,5 +85,20 @@ impl Book {
             page = page.create_next_page();
             tail = page.write(0, tail);
         }
+    }
+
+    /// Get number of allocated pages.
+    pub fn pages(&self) -> u64 {
+        let mut pages = 1;
+
+        let mut page = self.entry_page.clone();
+
+        while let Some(child) = page.read_next_page() {
+            page = child;
+
+            pages += 1;
+        }
+
+        pages
     }
 }

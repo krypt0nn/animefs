@@ -1,5 +1,7 @@
 use crate::prelude::*;
 
+// TODO: implement pages cache in addition to the IO buffer.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PageHeader {
     pub prev_page_number: u32,
@@ -69,6 +71,23 @@ impl Page {
     #[inline]
     pub const fn number(&self) -> u32 {
         self.page_number
+    }
+
+    /// Convert current page into a book.
+    pub fn into_book(self) -> Book {
+        let (response_sender, response_receiver) = flume::bounded(1);
+
+        self.handler.send_normal(FilesystemTask::ReadFilesystemHeader { response_sender })
+            .unwrap_or_else(|err| {
+                panic!("Failed to read filesystem header : filesystem closed : {err}");
+            });
+
+        let header = response_receiver.recv()
+            .unwrap_or_else(|err| {
+                panic!("Failed to read filesystem header : filesystem closed : {err}");
+            });
+
+        Book::open(self, header.page_size)
     }
 
     /// Read header of the page.
