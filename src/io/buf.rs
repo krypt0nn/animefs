@@ -82,7 +82,7 @@ impl<T> StorageIO for BufStorageIO<T> where T: StorageIO {
         }
 
         // Read bytes directly from the IO.
-        T::read(&mut self.io, offset, length)
+        self.io.read(offset, length)
     }
 
     fn write(&mut self, offset: u64, bytes: impl AsRef<[u8]>) {
@@ -121,20 +121,20 @@ impl<T> StorageIO for BufStorageIO<T> where T: StorageIO {
                         let k = n - offset;
 
                         // Copy all the bytes that can be moved to the already allocated buffer.
-                        if n > offset {
+                        if k > 0 {
                             self.buf[offset..n].copy_from_slice(&bytes[..k]);
                         }
 
                         // If we can allocate more bytes for the buffer.
                         if self.size > n {
                             // Store all the bytes if they fit into the buffer.
-                            if end <= self.size {
+                            if end < self.size {
                                 self.buf.extend_from_slice(&bytes[k..]);
                             }
 
                             // Otherwise store only part of them.
                             else {
-                                self.buf.extend_from_slice(&bytes[k..self.size]);
+                                self.buf.extend_from_slice(&bytes[k..self.size - offset]);
                             }
                         }
                     }
@@ -142,7 +142,7 @@ impl<T> StorageIO for BufStorageIO<T> where T: StorageIO {
             }
         }
 
-        T::write(&mut self.io, offset, bytes)
+        self.io.write(offset, bytes)
     }
 
     fn append(&mut self, bytes: impl AsRef<[u8]>) {
@@ -150,18 +150,18 @@ impl<T> StorageIO for BufStorageIO<T> where T: StorageIO {
 
         let n = self.buf.len();
 
-        if n < self.size {
+        if self.size > n {
             let m = bytes.len();
             let k = self.size - n;
 
-            if k > m {
+            if k >= m {
                 self.buf.extend_from_slice(bytes);
             } else {
                 self.buf.extend_from_slice(&bytes[..k]);
             }
         }
 
-        T::append(&mut self.io, bytes)
+        self.io.append(bytes)
     }
 
     #[inline]
@@ -170,13 +170,13 @@ impl<T> StorageIO for BufStorageIO<T> where T: StorageIO {
             return 0;
         }
 
-        T::len(&mut self.io)
+        self.io.len()
     }
 
     #[inline]
     fn is_empty(&mut self) -> bool {
         if self.size == 0 {
-            T::is_empty(&mut self.io)
+            self.io.is_empty()
         } else {
             self.buf.is_empty()
         }
@@ -227,7 +227,16 @@ mod tests {
 
             let mut rand = Wyrand::default();
 
-            file.append(vec![rand.next_lim_u16(256) as u8; rand.next_lim_usize(16)]);
+            let bytes = vec![rand.next_lim_u16(256) as u8; rand.next_lim_usize(16)];
+
+            file.append(&bytes);
+            buf.append(bytes);
+
+            let len_1 = file.len() as usize;
+            let len_2 = buf.len() as usize;
+
+            assert_eq!(len_1, len_2);
+            assert_eq!(file.read(0, len_1), buf.read(0, len_2));
 
             for i in 0..1000 {
                 let offset = rand.next_lim_u64(256);
@@ -237,14 +246,22 @@ mod tests {
                 buf.write(offset, bytes);
 
                 if i == 500 {
-                    file.append(vec![rand.next_lim_u16(256) as u8; rand.next_lim_usize(32)]);
+                    let bytes = vec![rand.next_lim_u16(256) as u8; rand.next_lim_usize(16)];
+
+                    file.append(&bytes);
+                    buf.append(bytes);
                 }
             }
 
-            file.append(vec![rand.next_lim_u16(256) as u8; rand.next_lim_usize(16)]);
+            let bytes = vec![rand.next_lim_u16(256) as u8; rand.next_lim_usize(16)];
+
+            file.append(&bytes);
+            buf.append(bytes);
 
             assert!(!file.is_empty());
             assert!(!buf.is_empty());
+
+            assert!(buf.buf.len() <= size);
 
             let len_1 = file.len() as usize;
             let len_2 = buf.len() as usize;
