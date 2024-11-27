@@ -49,7 +49,7 @@ impl Book {
     ///
     /// This method will return zeros if there's no content
     /// on given offset.
-    pub fn read(&self, mut offset: u64, length: u64) -> Vec<u8> {
+    pub fn read(&self, mut offset: u64, mut length: u64) -> Vec<u8> {
         let mut page = self.entry_page.clone();
 
         // Locate page at given offset.
@@ -60,7 +60,24 @@ impl Book {
         }
 
         // Read the bytes from it.
-        page.read(offset, length)
+        let mut buf = page.read(offset, length);
+
+        length -= buf.len() as u64;
+
+        // If we didn't read all the bytes - they're stored on the next page.
+        // Keep reading until we read enough.
+        while length > 0 {
+            page = page.create_next_page();
+
+            // Offset is always equal to 0 for the next pages.
+            let new_buf = page.read(0, length);
+
+            length -= new_buf.len() as u64;
+
+            buf.extend(new_buf);
+        }
+
+        buf
     }
 
     /// Write data to the given offset.

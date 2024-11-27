@@ -192,7 +192,9 @@ impl Page {
     /// Read page body with given offset and length.
     ///
     /// This method will return zeros if there's no content
-    /// on given offset.
+    /// on given offset. Returned buffer can be smaller than
+    /// the requested length if you've reached the end
+    /// of the page.
     pub fn read(&self, offset: u64, length: u64) -> Vec<u8> {
         let (response_sender, response_receiver) = flume::bounded(1);
 
