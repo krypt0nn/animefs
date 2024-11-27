@@ -55,7 +55,6 @@ impl<T: StorageIO> FilesystemWorker<T> {
             FilesystemTask::WriteFilesystemHeader { header } => {
                 self.header = header;
 
-                // TODO: can safely be delayed.
                 self.io.write(0, header.to_bytes());
             }
 
@@ -70,22 +69,20 @@ impl<T: StorageIO> FilesystemWorker<T> {
 
                 let len = self.io.len();
 
+                let page_number = if len > FilesystemHeader::LENGTH as u64 {
+                    let total_pages = (len - FilesystemHeader::LENGTH as u64) / (PageHeader::LENGTH as u64 + self.header.page_size);
+
+                    total_pages as u32
+                } else {
+                    0
+                };
+
                 self.io.append(page_header.to_bytes());
                 self.io.append(vec![0; self.header.page_size as usize]);
 
-                if len < FilesystemHeader::LENGTH as u64 {
-                    let page = Page::new(0, self.handler.clone());
+                let page = Page::new(page_number, self.handler.clone());
 
-                    let _ = response_sender.send(page);
-                }
-
-                else {
-                    let last_page_number = (len - FilesystemHeader::LENGTH as u64) / (PageHeader::LENGTH as u64 + self.header.page_size);
-
-                    let page = Page::new(last_page_number as u32 + 1, self.handler.clone());
-
-                    let _ = response_sender.send(page);
-                }
+                let _ = response_sender.send(page);
             }
 
             FilesystemTask::LinkPageForward { page_number, next_page_number } => {
@@ -98,6 +95,7 @@ impl<T: StorageIO> FilesystemWorker<T> {
                 let mut page_header = PageHeader::from_bytes(&page_header);
 
                 page_header.next_page_number = next_page_number;
+                page_header.has_next = true;
 
                 self.io.write(page_pos, page_header.to_bytes());
             }
