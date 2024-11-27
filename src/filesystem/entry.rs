@@ -59,6 +59,13 @@ impl FilesystemEntry {
 }
 
 #[derive(Debug, Clone)]
+/// Reader of the filesystem entry's siblings.
+///
+/// This iterator has an inner buffer of the filesystem tree
+/// to optimize disk reads. It's recommended to give it
+/// values multiple by the `FilesystemEntry::LENGTH`.
+///
+/// E.g. `BUF_SIZE = 32 * FilesystemEntry::LENGTH`.
 pub struct FilesystemTreeReader<const BUF_SIZE: u64> {
     book: Book,
     offset: u64,
@@ -83,11 +90,16 @@ impl<const BUF_SIZE: u64> Iterator for FilesystemTreeReader<BUF_SIZE> {
         entry.copy_from_slice(&self.buf[i..i + FilesystemEntry::LENGTH]);
 
         let entry = FilesystemEntry::from_bytes(&entry);
+
+        if entry.is_empty() {
+            return None;
+        }
+
         let offset = self.offset;
 
-        self.offset += FilesystemEntry::LENGTH as u64;
+        self.offset = entry.sibling_addr;
 
-        (!entry.is_empty()).then_some((offset, entry))
+        Some((offset, entry))
     }
 }
 
