@@ -222,7 +222,7 @@ pub mod tests {
             for i in 0..1000 {
                 let entry = FilesystemEntry::new(i);
 
-                tree.insert_child(FilesystemTree::ROOT_OFFSET, entry)
+                tree.insert_child(FilesystemTree::ROOT_OFFSET, entry);
             }
 
             let offset = FilesystemTree::ROOT_OFFSET + (1000 - 1) * FilesystemEntry::LENGTH as u64;

@@ -232,12 +232,6 @@ impl Page {
             );
         });
 
-        response_receiver.recv()
-            .unwrap_or_else(|err| {
-                panic!(
-                    "Failed to write page 0x{:08x} : filesystem closed : {err}",
-                    self.page_number
-                );
-            })
+        response_receiver.recv().unwrap_or_default()
     }
 }
