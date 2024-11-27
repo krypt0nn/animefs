@@ -175,11 +175,15 @@ impl Page {
                 panic!("Failed to create page : filesystem closed : {err}");
             });
 
-        self.handler.send_normal(FilesystemTask::LinkPages {
+        self.handler.send_normal(FilesystemTask::LinkPageForward {
             page_number: self.page_number,
             next_page_number: page.page_number
         }).unwrap_or_else(|err| {
-            panic!("Failed to create page : filesystem closed : {err}");
+            panic!(
+                "Failed to link page {:08x} with the newly created {:08x} : filesystem closed : {err}",
+                self.page_number,
+                page.page_number
+            );
         });
 
         page

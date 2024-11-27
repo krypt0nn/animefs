@@ -88,14 +88,24 @@ impl<T: StorageIO> FilesystemWorker<T> {
                 }
             }
 
-            FilesystemTask::LinkPages { page_number, next_page_number } => {
-                todo!("Pages linking is not done yet. Attempted to link 0x{page_number:08x} with 0x{next_page_number:08x}");
+            FilesystemTask::LinkPageForward { page_number, next_page_number } => {
+                let page_pos = FilesystemHeader::LENGTH as u64 + page_number as u64 * (PageHeader::LENGTH as u64 + self.header.page_size);
+
+                let mut page_header = [0; PageHeader::LENGTH];
+
+                page_header.copy_from_slice(&self.io.read(page_pos, PageHeader::LENGTH));
+
+                let mut page_header = PageHeader::from_bytes(&page_header);
+
+                page_header.next_page_number = next_page_number;
+
+                self.io.write(page_pos, page_header.to_bytes());
             }
 
             FilesystemTask::ReadPageHeader { page_number, response_sender } => {
-                let mut page_header = [0; PageHeader::LENGTH];
-
                 let page_pos = FilesystemHeader::LENGTH as u64 + page_number as u64 * (PageHeader::LENGTH as u64 + self.header.page_size);
+
+                let mut page_header = [0; PageHeader::LENGTH];
 
                 page_header.copy_from_slice(&self.io.read(page_pos, PageHeader::LENGTH));
 

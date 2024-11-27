@@ -29,7 +29,12 @@ pub enum FilesystemTask {
         response_sender: Sender<Page>
     },
 
-    LinkPages {
+    /// Link `page_number` page with the `next_page_number` page
+    /// in the forward direction (`page_number -> next_page_number`).
+    ///
+    /// This command will set the next page number header's field
+    /// of the `page_number` page equal to the `next_page_number` value.
+    LinkPageForward {
         page_number: u32,
         next_page_number: u32
     },
