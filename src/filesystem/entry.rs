@@ -87,7 +87,7 @@ impl<const BUF_SIZE: u64> Iterator for FilesystemTreeReader<BUF_SIZE> {
 
         self.offset += FilesystemEntry::LENGTH as u64;
 
-        entry.is_empty().then_some((offset, entry))
+        (!entry.is_empty()).then_some((offset, entry))
     }
 }
 
@@ -111,16 +111,23 @@ impl FilesystemTree {
 
         last_entry_addr.copy_from_slice(&book.read(0, 8));
 
+        let last_entry_addr = u64::from_be_bytes(last_entry_addr);
+
         Self {
             book,
-            last_entry_addr: u64::from_be_bytes(last_entry_addr)
+
+            last_entry_addr: if last_entry_addr == 0 {
+                Self::ROOT_OFFSET
+            } else {
+                last_entry_addr
+            }
         }
     }
 
     #[inline]
     /// Read root filesystem entries.
     pub fn read_root<const BUF_SIZE: u64>(&self) -> FilesystemTreeReader<BUF_SIZE> {
-        self.read(8)
+        self.read(Self::ROOT_OFFSET)
     }
 
     #[inline]
@@ -135,7 +142,7 @@ impl FilesystemTree {
             book: self.book.clone(),
             offset,
             buf_offset: 0,
-            buf: Vec::with_capacity(BUF_SIZE as usize)
+            buf: vec![]
         }
     }
 
@@ -144,10 +151,12 @@ impl FilesystemTree {
     /// If entry under the offset already has a child - function will iterate
     /// to the latest one and link it with the inserted entry.
     ///
+    /// Return offset of the inserted entry.
+    ///
     /// **WARNING**: First bytes of the page are used to hold metadata about the entries tree.
     /// Make sure to use `FilesystemTree::ROOT_OFFSET` as the first entry offset.
     /// Also be accurate to not to create cycle references.
-    pub fn insert_child(&mut self, mut offset: u64, entry: FilesystemEntry) {
+    pub fn insert_child(&mut self, mut offset: u64, entry: FilesystemEntry) -> u64 {
         let mut parent = [0; FilesystemEntry::LENGTH];
 
         parent.copy_from_slice(&self.book.read(offset, FilesystemEntry::LENGTH as u64));
@@ -170,11 +179,11 @@ impl FilesystemTree {
         self.book.write(i, entry.to_bytes());
         self.book.write(offset, parent.to_bytes());
 
-        dbg!(offset, i);
-
         self.last_entry_addr = i;
 
         self.book.write(0, self.last_entry_addr.to_be_bytes());
+
+        i
     }
 
     /// Insert given entry as a sibling of the entry under the provided offset.
@@ -182,10 +191,12 @@ impl FilesystemTree {
     /// If entry under the offset already has a sibling - function will iterate
     /// to the latest one and link it with the inserted entry.
     ///
+    /// Return offset of the inserted entry.
+    ///
     /// **WARNING**: First bytes of the page are used to hold metadata about the entries tree.
     /// Make sure to use `FilesystemTree::ROOT_OFFSET` as the first entry offset.
     /// Also be accurate to not to create cycle references.
-    pub fn insert_sibling<const BUF_SIZE: u64>(&mut self, offset: u64, entry: FilesystemEntry) {
+    pub fn insert_sibling<const BUF_SIZE: u64>(&mut self, offset: u64, entry: FilesystemEntry) -> u64 {
         let reader = self.read::<BUF_SIZE>(offset);
 
         match reader.last() {
@@ -200,10 +211,16 @@ impl FilesystemTree {
                 self.last_entry_addr = i;
 
                 self.book.write(0, self.last_entry_addr.to_be_bytes());
+
+                i
             }
 
             // There's no entry under the offset so we can freely make a new one.
-            None => self.book.write(offset, entry.to_bytes())
+            None => {
+                self.book.write(offset, entry.to_bytes());
+
+                offset
+            }
         }
     }
 }
@@ -220,16 +237,25 @@ pub mod tests {
             let book = Page::new(0, fs.handler().clone()).into_book();
 
             let mut tree = FilesystemTree::open(book);
+            let mut offset = FilesystemTree::ROOT_OFFSET;
 
             for i in 0..1000 {
                 let entry = FilesystemEntry::new(i);
 
-                tree.insert_child(FilesystemTree::ROOT_OFFSET, entry);
+                offset = tree.insert_child(offset, entry);
             }
 
-            let offset = FilesystemTree::ROOT_OFFSET + (1000 - 1) * FilesystemEntry::LENGTH as u64;
-
+            assert_eq!(offset, FilesystemTree::ROOT_OFFSET + 1000 * FilesystemEntry::LENGTH as u64);
             assert_eq!(tree.read::<32>(offset).next(), Some((offset, FilesystemEntry::new(999))));
+
+            for i in 1000..1100 {
+                let entry = FilesystemEntry::new(i);
+
+                offset = tree.insert_child(FilesystemTree::ROOT_OFFSET, entry);
+            }
+
+            assert_eq!(offset, FilesystemTree::ROOT_OFFSET + 1100 * FilesystemEntry::LENGTH as u64);
+            assert_eq!(tree.read::<32>(offset).next(), Some((offset, FilesystemEntry::new(1099))));
         });
     }
 }

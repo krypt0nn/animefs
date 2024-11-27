@@ -94,7 +94,7 @@ pub(crate) mod tests {
             .open(&path)
             .expect("Failed to open file");
 
-        let buf = BufStorageIO::new(file, 1024 * 1024);
+        let buf = BufStorageIO::new(file, 1024 * 1024 * 16);
 
         let mut fs = FilesystemDriver::new(buf);
 
