@@ -119,3 +119,72 @@ impl Book {
         pages
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::prelude::*;
+    use crate::filesystem::driver::tests::with_fs;
+
+    #[test]
+    fn read() {
+        with_fs("book-read", |fs, _| {
+            let header = fs.read_header();
+
+            let mut page = Page::new(0, fs.handler().to_owned());
+            let book = Book::open(page.clone(), header.page_size);
+
+            for i in 1..=255 {
+                page.write(0, vec![i; header.page_size as usize]);
+
+                page = page.create_next_page();
+            }
+
+            for i in 1..255_u8 {
+                let j = (i as u64 - 1) * header.page_size;
+
+                let page = book.read(j, header.page_size);
+
+                assert_eq!(page.len() as u64, header.page_size);
+                assert_eq!(page, vec![i; header.page_size as usize]);
+
+                let page = book.read(j + i as u64, header.page_size);
+
+                let k = (header.page_size - i as u64) as usize;
+
+                assert_eq!(page.len() as u64, header.page_size);
+                assert_eq!(page[..k], vec![i; k]);
+                assert_eq!(page[k..], vec![i + 1; i as usize]);
+            }
+        });
+    }
+
+    #[test]
+    fn write() {
+        with_fs("book-write", |fs, _| {
+            let header = fs.read_header();
+
+            let mut page = Page::new(0, fs.handler().to_owned());
+            let book = Book::open(page.clone(), header.page_size);
+
+            for i in 0..=255 {
+                book.write((i as u64) * header.page_size, vec![i; header.page_size as usize]);
+                book.write((i as u64) * header.page_size, vec![!i; header.page_size as usize / 2]);
+            }
+
+            for i in 0..255 {
+                let buf = page.read(0, header.page_size);
+
+                assert_eq!(&buf[..header.page_size as usize / 2], vec![!i; header.page_size as usize / 2]);
+                assert_eq!(&buf[header.page_size as usize / 2..], vec![i; header.page_size as usize / 2]);
+
+                page = page.read_next_page().unwrap();
+            }
+
+            book.write(header.page_size / 2 - 1, vec![17; header.page_size as usize * 4 + 1]);
+
+            let buf = book.read(header.page_size / 2 - 1, header.page_size * 4 + 1);
+
+            assert_eq!(buf, vec![17; header.page_size as usize * 4 + 1]);
+        });
+    }
+}

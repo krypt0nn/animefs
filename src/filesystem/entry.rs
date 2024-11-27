@@ -170,6 +170,8 @@ impl FilesystemTree {
         self.book.write(i, entry.to_bytes());
         self.book.write(offset, parent.to_bytes());
 
+        dbg!(offset, i);
+
         self.last_entry_addr = i;
 
         self.book.write(0, self.last_entry_addr.to_be_bytes());
