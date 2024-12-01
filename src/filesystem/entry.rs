@@ -5,6 +5,9 @@ pub struct FilesystemEntry {
     /// Hash of the entry's name.
     pub name: u64,
 
+    /// ID of the entry, 0 if it's not readable.
+    pub inode: u64,
+
     /// Address within the book of the first entry's sibling.
     pub sibling_addr: u64,
 
@@ -13,13 +16,16 @@ pub struct FilesystemEntry {
 }
 
 impl FilesystemEntry {
-    pub const LENGTH: usize = 24;
+    pub const LENGTH: usize = 32;
 
     #[inline]
     /// Create new entry without children and siblings.
-    pub const fn new(name: u64) -> Self {
+    ///
+    /// If inode is 0, then the entry is not readable.
+    pub const fn new(name: u64, inode: u64) -> Self {
         Self {
             name,
+            inode,
             sibling_addr: 0,
             child_addr: 0
         }
@@ -27,21 +33,34 @@ impl FilesystemEntry {
 
     #[inline]
     /// Check if the current entry is unset (empty).
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         (self.name | self.sibling_addr | self.child_addr) == 0
+    }
+
+    #[inline]
+    /// Check if the current entry is readable.
+    ///
+    /// Readable entries have non-zero inode which
+    /// could be looked up in the metadata B-Tree
+    /// to read the file's content.
+    pub const fn is_readable(&self) -> bool {
+        self.inode != 0
     }
 
     pub fn from_bytes(bytes: &[u8; Self::LENGTH]) -> Self {
         let mut name = [0; 8];
+        let mut inode = [0; 8];
         let mut sibling_addr = [0; 8];
         let mut child_addr = [0; 8];
 
         name.copy_from_slice(&bytes[..8]);
-        sibling_addr.copy_from_slice(&bytes[8..16]);
-        child_addr.copy_from_slice(&bytes[16..24]);
+        inode.copy_from_slice(&bytes[8..16]);
+        sibling_addr.copy_from_slice(&bytes[16..24]);
+        child_addr.copy_from_slice(&bytes[24..32]);
 
         Self {
             name: u64::from_be_bytes(name),
+            inode: u64::from_be_bytes(inode),
             sibling_addr: u64::from_be_bytes(sibling_addr),
             child_addr: u64::from_be_bytes(child_addr)
         }
@@ -51,8 +70,9 @@ impl FilesystemEntry {
         let mut entry = [0; Self::LENGTH];
 
         entry[..8].copy_from_slice(&self.name.to_be_bytes());
-        entry[8..16].copy_from_slice(&self.sibling_addr.to_be_bytes());
-        entry[16..24].copy_from_slice(&self.child_addr.to_be_bytes());
+        entry[8..16].copy_from_slice(&self.inode.to_be_bytes());
+        entry[16..24].copy_from_slice(&self.sibling_addr.to_be_bytes());
+        entry[24..32].copy_from_slice(&self.child_addr.to_be_bytes());
 
         entry
     }
@@ -372,20 +392,20 @@ pub mod tests {
             let mut tree = FilesystemTree::open(book);
             let mut offset = FilesystemTree::ROOT_OFFSET;
 
-            for i in 0..128 {
-                let entry = FilesystemEntry::new(i);
+            for i in 1..128 {
+                let entry = FilesystemEntry::new(i, 0);
 
                 offset = tree.insert_child::<1024>(FilesystemTree::ROOT_OFFSET, entry);
             }
 
-            assert_eq!(offset, FilesystemTree::ROOT_OFFSET + 128 * FilesystemEntry::LENGTH as u64);
+            assert_eq!(offset, FilesystemTree::ROOT_OFFSET + 127 * FilesystemEntry::LENGTH as u64);
 
             let root = tree.read(FilesystemTree::ROOT_OFFSET);
 
             let (offset, last_child) = tree.reader::<1024>(root.child_addr, FilesystemTreeReaderMode::Sibling).last().unwrap();
 
-            assert_eq!(offset, FilesystemTree::ROOT_OFFSET + 128 * FilesystemEntry::LENGTH as u64);
-            assert_eq!(last_child, FilesystemEntry::new(127));
+            assert_eq!(offset, FilesystemTree::ROOT_OFFSET + 127 * FilesystemEntry::LENGTH as u64);
+            assert_eq!(last_child, FilesystemEntry::new(127, 0));
         });
     }
 }
