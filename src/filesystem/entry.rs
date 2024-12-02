@@ -157,6 +157,10 @@ impl<const BUF_SIZE: u64> Iterator for FilesystemTreeReader<BUF_SIZE> {
     type Item = (u64, FilesystemEntry);
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.offset == 0 {
+            return None;
+        }
+
         if self.buf.is_empty() || (self.offset > self.buf_offset && self.offset - self.buf_offset > BUF_SIZE - FilesystemEntry::LENGTH as u64) || self.buf_offset > self.offset {
             self.buf_offset = self.offset;
 
@@ -178,19 +182,17 @@ impl<const BUF_SIZE: u64> Iterator for FilesystemTreeReader<BUF_SIZE> {
         let offset = self.offset;
 
         match self.mode {
-            FilesystemTreeReaderMode::Sibling if entry.sibling_addr != 0 => {
+            FilesystemTreeReaderMode::Sibling => {
                 self.offset = entry.sibling_addr;
 
                 Some((offset, entry))
             }
 
-            FilesystemTreeReaderMode::Child if entry.child_addr != 0 => {
+            FilesystemTreeReaderMode::Child => {
                 self.offset = entry.child_addr;
 
                 Some((offset, entry))
             }
-
-            _ => None
         }
     }
 }
@@ -387,25 +389,40 @@ pub mod tests {
     #[test]
     fn children() {
         with_fs("entry-children", |fs, _| {
-            let book = Page::new(0, fs.handler().clone()).into_book();
+            let entries = 128;
+
+            let (response_sender, response_receiver) = flume::bounded(1);
+
+            fs.handler().send_normal(FilesystemTask::CreatePage {
+                parent_page_number: None,
+                response_sender
+            }).unwrap_or_else(|err| {
+                panic!("Failed to create page : filesystem closed : {err}");
+            });
+
+            let book = response_receiver.recv()
+                .unwrap_or_else(|err| {
+                    panic!("Failed to create page : filesystem closed : {err}");
+                })
+                .into_book();
 
             let mut tree = FilesystemTree::open(book);
             let mut offset = FilesystemTree::ROOT_OFFSET;
 
-            for i in 1..128 {
+            for i in 1..entries + 1 {
                 let entry = FilesystemEntry::new(i, 0);
 
                 offset = tree.insert_child::<1024>(FilesystemTree::ROOT_OFFSET, entry);
             }
 
-            assert_eq!(offset, FilesystemTree::ROOT_OFFSET + 127 * FilesystemEntry::LENGTH as u64);
+            assert_eq!(offset, FilesystemTree::ROOT_OFFSET + entries * FilesystemEntry::LENGTH as u64);
 
             let root = tree.read(FilesystemTree::ROOT_OFFSET);
 
             let (offset, last_child) = tree.reader::<1024>(root.child_addr, FilesystemTreeReaderMode::Sibling).last().unwrap();
 
-            assert_eq!(offset, FilesystemTree::ROOT_OFFSET + 127 * FilesystemEntry::LENGTH as u64);
-            assert_eq!(last_child, FilesystemEntry::new(127, 0));
+            assert_eq!(offset, FilesystemTree::ROOT_OFFSET + entries * FilesystemEntry::LENGTH as u64);
+            assert_eq!(last_child, FilesystemEntry::new(entries, 0));
         });
     }
 }

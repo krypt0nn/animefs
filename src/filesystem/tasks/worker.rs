@@ -72,7 +72,11 @@ impl<T: StorageIO> FilesystemWorker<T> {
                 let page_number = if len > FilesystemHeader::LENGTH as u64 {
                     let total_pages = (len - FilesystemHeader::LENGTH as u64) / (PageHeader::LENGTH as u64 + self.header.page_size);
 
-                    total_pages as u32
+                    if total_pages * (PageHeader::LENGTH as u64 + self.header.page_size) < (len - FilesystemHeader::LENGTH as u64) {
+                        total_pages as u32 + 1
+                    } else {
+                        total_pages as u32
+                    }
                 } else {
                     0
                 };
